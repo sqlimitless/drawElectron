@@ -1,9 +1,14 @@
 <template>
+  <pre style="border: solid 1px; background-color: #f7f5f5;">
+    <h4>패치노트</h4>
+    <span>재생버튼 추가함 (오루 있을수 있음~)</span>
+  </pre>
   <div id="box">
     X 좌표 :<input type="number" v-model="xVal">
     Y 좌표 :<input type="number" v-model="yVal">
     <p>
       <button type="button" @click="coordinateEnter">좌표 입력</button>
+      <button type="button" @click="play">재생</button>
     </p>
     <p>
       <input type="checkbox" v-model="useMouse" id="useMouse">
@@ -16,29 +21,31 @@
 <script setup>
 import {onMounted, ref} from "vue";
 
-let ctx = ref(null);
-let xVal = ref(0);
-let yVal = ref(0);
-let useMouse = ref(false);
 const maxHeight = ref(750);
 const maxWidth = ref(750);
 const r = 5;
 const c = "rgb(29, 219, 22)";
 
+let ctx = ref(null);
+let xVal = ref(0);
+let yVal = ref(0);
+let useMouse = ref(false);
+let create_dot_arr = ref([]);
+
 onMounted(() => {
-  const canvasObj = document.getElementById("canvas");
+  const canvasObj = document.querySelector("#canvas");
   ctx = canvasObj.getContext('2d');
 })
 
 const coordinateEnter = () => {
   if (checkMaxXAndMaxY(xVal.value, yVal.value)) {
-    dotDrawing(ctx, xVal.value, yVal.value, r, c);
+    dotDrawing(ctx, xVal.value, yVal.value, r);
   }
 }
 
-let create_dot_arr = ref([]);
+
 const draw = (e) => {
-  if(!useMouse.value){
+  if (!useMouse.value) {
     return false;
   }
   const x = e.offsetX;
@@ -46,7 +53,7 @@ const draw = (e) => {
   if (checkMaxXAndMaxY(x, y)) {
     xVal.value = x;
     yVal.value = y;
-    dotDrawing(ctx, x, y, r, c);
+    dotDrawing(ctx, x, y, r);
   }
 }
 
@@ -59,7 +66,17 @@ const checkMaxXAndMaxY = (x, y) => {
   }
 }
 
-const dotDrawing = (ctx, x, y, r, color) => {
+const dotDrawing = (ctx, x, y, r) => {
+  let color;
+  if (create_dot_arr.value.length) {
+    color = c;
+    const beforeDot = create_dot_arr.value[create_dot_arr.value.length - 1];
+    const beforeX = beforeDot.x;
+    const beforeY = beforeDot.y;
+    lineDrawing(ctx, beforeX, beforeY, x, y, 'red');
+  } else {
+    color = "rgb(22,48,219)";
+  }
   if (ctx != null) {
     ctx.save();
     ctx.beginPath();
@@ -68,16 +85,8 @@ const dotDrawing = (ctx, x, y, r, color) => {
     ctx.fill();
     ctx.restore();
   }
-
-  if (create_dot_arr.value.length) {
-    const beforeDot = create_dot_arr.value[create_dot_arr.value.length - 1];
-    const beforeX = beforeDot.x;
-    const beforeY = beforeDot.y;
-    lineDrawing(ctx, beforeX, beforeY, x, y, 'red');
-    arrowDrawing(ctx, beforeX, beforeY, x, y, 'red');
-  }
   const obj = {
-    'color': color,
+    'color': c.value,
     'x': x,
     'y': y,
     'r': r
@@ -97,25 +106,60 @@ const lineDrawing = (ctx, sx, sy, ex, ey, color) => {
   }
 }
 
-const arrowDrawing = (ctx, sx, sy, ex, ey, color) => {
-  if (ctx != null) {
-    var aWidth = 5;
-    var aLength = 12;
-    var dx = ex - sx;
-    var dy = ey - sy;
-    var angle = Math.atan2(dy, dx);
-    var length = Math.sqrt(dx * dx + dy * dy);
+let moveIndex = 0;
+let xBeforeLineDot = 0;
+let yBeforeLineDot = 0;
+const play = () => {
+  const nextLineDot = () => {
+    const ax = create_dot_arr.value[moveIndex].x;
+    const ay = create_dot_arr.value[moveIndex].y;
+    if (moveIndex === 0) {
+      xBeforeLineDot = ax;
+      yBeforeLineDot = ay;
+      moveIndex++;
+      return {'x': ax, 'y': ay};
+    }
+    const yDistance = (create_dot_arr.value[moveIndex - 1].y - ay)
+    const xDistance = (create_dot_arr.value[moveIndex - 1].x - ax)
+    let inclination = yDistance / xDistance;
+    if (Infinity === Math.abs(inclination)) {
+      inclination = 999999999;
+    }
+    const yIntercept = ay - (inclination * ax);
+    let x;
+    let y;
+    if (xBeforeLineDot < ax) {
+      x = ++xBeforeLineDot;
+      y = inclination * x + yIntercept;
+    } else if (xBeforeLineDot > ax) {
+      x = --xBeforeLineDot;
+      y = inclination * x + yIntercept;
+    } else {
+      x = xBeforeLineDot;
+      moveIndex++;
+    }
+    if ((xBeforeLineDot < ax && ax < x) || (xBeforeLineDot > ax && ax > x)) {
+      moveIndex++;
+    }
+    return {'x': x, 'y': y};
+  }
 
-    //두점 선긋기
-    ctx.translate(sx, sy);
-    ctx.rotate(angle);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-
+  if (moveIndex < create_dot_arr.value.length) {
+    ctx.clearRect(0, 0, maxWidth.value, maxHeight.value); // 전체 지우기
+    ctx.beginPath(); //새로 그리기~
+    const nextDot = nextLineDot();
+    // console.log(nextDot)
+    ctx.arc(nextDot.x, nextDot.y, 5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    requestAnimationFrame(play); //루프를 통해 매번 새로그림
+  } else {
+    create_dot_arr.value = [];
+    moveIndex = 0;
+    xBeforeLineDot = 0;
+    yBeforeLineDot = 0;
   }
 }
+
 
 </script>
 

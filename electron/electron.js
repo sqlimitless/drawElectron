@@ -22,6 +22,7 @@ function createWindow() {
           ? 'http://localhost:5173'
           : `file://${path.join(__dirname, '../dist/index.html')}`
   );
+  mainWindow.setMenu(null);
   // Open the DevTools.
   if (isDev) {
     mainWindow.webContents.openDevTools();
